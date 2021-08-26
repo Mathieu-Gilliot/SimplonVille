@@ -29,4 +29,9 @@ export class Variables {
       longitude: 1.8521
     }
 
+    //Mails
+
+    public static cityMaintenanceTemplate= "template_6nb8p8i";
+    public static lostPetAlert = "template_afo2r6r";
+    public static carCrashAlert = "Nouvelle alerte concernant la voirie de {{name}} via SimplonVille App"
 }

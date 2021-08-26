@@ -5,11 +5,11 @@ import { AlertForm } from '../../components/alertForm/alertForm';
 import { GenericHeader } from '../../components/genericHeader/genericHeader';
 import styles from '../appStyles';
 
-export function alertFormPage({navigation}:any) {
+export function AlertFormPage({navigation}:any) {
         return <View style={styles.container}>
            <GenericHeader iconUri={require('../../assets/Images/warning.png')} text={"Alertez vos concitoyens"} onPress={() => navigation.navigate('home')}></GenericHeader>
            <ScrollView>
-                   <AlertForm></AlertForm>
+                   <AlertForm onEmailSend={(status:string)=> navigation.navigate('send',{status:status})}></AlertForm>
            </ScrollView>
         </View>
 }

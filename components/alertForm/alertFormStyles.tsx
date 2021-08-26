@@ -65,5 +65,10 @@ export default StyleSheet.create({
     },
     errorText:{
         color:"red"
+    },
+    cameraContainer:{
+        width: "100%",
+        height: 300,
+        marginTop:15,
     }
 })

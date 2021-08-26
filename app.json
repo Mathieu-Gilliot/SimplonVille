@@ -17,20 +17,27 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.simplon.simplonville"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/Images/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "package": "com.simplon.simplonville"
     },
     "web": {
       "favicon": "./assets/Images/favicon.png"
     },
     "packagerOpts": {
       "config": "metro.config.js",
-      "sourceExts": ["js", "jsx", "scss", "sass"]
+      "sourceExts": [
+        "js",
+        "jsx",
+        "scss",
+        "sass"
+      ]
     }
   }
 }

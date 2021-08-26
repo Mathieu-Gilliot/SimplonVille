@@ -6,6 +6,6 @@ export default StyleSheet.create({
        width: "100%",
        height: 300,
        marginTop:15,
-       borderRadius:15
+       backgroundColor:"transparent"
    }
 })
