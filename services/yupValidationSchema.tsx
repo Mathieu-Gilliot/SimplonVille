@@ -1,13 +1,13 @@
 import * as yup from 'yup';
 
 
-export const alertValidationSchema = yup.object().shape({
+export  const alertValidationSchema = yup.object().shape({
     alertType: yup.string().required('La cause doit être renseignée'),
     alertDescription: yup.string().required('Veuillez décrire l\'incident'),
     alertDate: yup.string().required('Veuillez renseigner la date de l\'incident'),
     alertHour: yup.string().required('Veuillez renseigner l\'heure de l\'incident'),
     alertLocation: yup.string().required('Veuillez renseigner l\'adresse où s\'est produit l`\'incident'),
-    alertPicture: yup.object(),
+    alertPicture: yup.string(),
     name: yup.string().required('Veuillez renseigner votre nom'),
     firstName: yup.string().required('Veuillez renseigner votre prénom'),
     adress: yup.string().required('Veuillez renseigner votre adresse'),

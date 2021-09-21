@@ -1,27 +1,34 @@
-import MapView, { Region } from "react-native-maps";
-import React from 'react';
+import MapView, { Marker, MarkerAnimated } from "react-native-maps";
+import React, { useEffect, useState } from 'react';
 import { View } from "react-native";
 import { Variables } from "../../assets/Variables";
-import IRegion from "../../interfaces/IRegion";
 import styles from './mapStyles';
+import { ICoord } from "../../interfaces/ICoord";
 
-export function CustomMap() {
+export function CustomMap(props) {
 
     //  const regionIsDefined: boolean = location.coords != null && location.coords !=undefined;
-
+    const [position,setPosition]= useState<ICoord>();
+    useEffect(() => {
+       setPosition(props);
+    }, [])
     return <View >
-      
-       
-           <MapView
-           initialRegion={
-               {
-                   latitude: Variables.baseCoords.latitude,
-                   longitude: Variables.baseCoords.longitude,
-                   latitudeDelta: 0.09,
-                   longitudeDelta: 0.04
-               }}
-           style={styles.container}
-       />
+
+
+        <MapView
+            initialRegion={position != null?position:props}
+            style={styles.container}
+            
+        >
+            <Marker
+                coordinate={{
+                    latitude: position !=null?position.latitude:props.latitude,
+                    longitude: position !=null?position.longitude:props.longitude
+                }}
+                draggable
+               onDragEnd={(e)=>{props.onMarkerDrag(e.nativeEvent.coordinate)}}
+            />
+        </MapView>
 
     </View>
 

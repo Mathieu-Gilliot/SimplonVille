@@ -1,5 +1,5 @@
-import { Formik} from "formik";
-import React from "react";
+import { Formik } from "formik";
+import React, { useCallback } from "react";
 import { TextInput, View, Text, Pressable, Image, TouchableOpacity } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useState } from "react";
@@ -9,11 +9,16 @@ import * as Location from "expo-location";
 import { CustomMap } from "../map/map";
 import { alertValidationSchema } from "../../services/yupValidationSchema";
 import { Camera } from "expo-camera";
-import { CameraType } from "expo-camera/build/Camera.types";
+import { CameraCapturedPicture, CameraType } from "expo-camera/build/Camera.types";
 import { useEffect } from "react";
 import ImageEditor from "@react-native-community/image-editor";
 import * as FileSystem from 'expo-file-system'
-import  sendEmail from '../../services/mail';
+import sendEmail from '../../services/mail';
+import MessageQueue from "react-native/Libraries/BatchedBridge/MessageQueue";
+import { onChange } from "react-native-reanimated";
+import { ICoord } from "../../interfaces/ICoord";
+import { Variables } from "../../assets/Variables";
+import IRegion from "../../interfaces/IRegion";
 
 export function AlertForm(props) {
     const [selectedAlertCause, setSelectedAlertCause] = useState<string>();
@@ -30,31 +35,42 @@ export function AlertForm(props) {
     const [currentLocation, setcurrentLocation] = useState<string>();
 
     const [adress, setAdress] = useState<string>();
-    const [city,setCity] = useState<string>();
-    const [zipCode,setZipCode] = useState<string>();
+    const [city, setCity] = useState<string>();
+    const [zipCode, setZipCode] = useState<string>();
 
-    const [cameraStarted, setCameraStarted]= useState(false);
+    const [cameraStarted, setCameraStarted] = useState(false);
     const [camera, setCamera] = useState({
         hasCameraPermission: null,
         type: Camera.Constants.Type.back,
-        ref:null
+        ref: null
     });
-    const [photo,setPhoto] = useState()
+    const [photo, setPhoto] = useState({
+        width: null,
+        height: null,
+        uri: "",
+        base64: null,
+        exif: null,
+    })
+
+    const [coord, setCoord] = useState<ICoord>()
 
 
     const getLocation = async () => {
 
         let { status } = await Location.requestForegroundPermissionsAsync();
+
         if (status !== 'granted') {
             setErrorMsg('Permission to access location was denied');
             return "Error occured";
-        } else {
-            let location = await Location.getCurrentPositionAsync({ accuracy: 6 });
-            setLocation(location);
+        } else if (location == null) {
+            await Location.watchPositionAsync({ accuracy: 6, timeInterval: 10000 }, (location) => {
+                setLocation(location);
+                setCoord({ latitude: location.coords.latitude, longitude: location.coords.longitude, latitudeDelta: 0.4, longitudeDelta: 0.4 })
+            })
         }
-
     };
 
+ 
     const reverseGeoCode = async (isLocation: boolean) => {
 
         if (location != null) {
@@ -80,10 +96,12 @@ export function AlertForm(props) {
     };
 
     const handleDatePicked = (event: Event, date?: Date | undefined) => {
-        console.log("A date has been picked: ", date);
-        hideDateTimePicker();
-        if (date != undefined) {
-            setDate(date);
+        if (!unmounted) {
+            console.log("A date has been picked: ", date);
+            hideDateTimePicker();
+            if (date != undefined) {
+                setDate(date);
+            }
         }
     };
 
@@ -98,39 +116,63 @@ export function AlertForm(props) {
 
 
     const handleTimePicked = (event: Event, date?: Date | undefined) => {
-        console.log("A date has been picked: ", date?.getHours().toString() + ":" + (date?.getMinutes() != undefined && date?.getMinutes() < 10 ? '0' : '') + date?.getMinutes());
-        hideTimePicker();
-        if (date != undefined) {
-            setDateTime(date);
+        if (!unmounted) {
+            console.log("A date has been picked: ", date?.getHours().toString() + ":" + (date?.getMinutes() != undefined && date?.getMinutes() < 10 ? '0' : '') + date?.getMinutes());
+            hideTimePicker();
+            if (date != undefined) {
+                setDateTime(date);
+            }
         }
     };
 
 
 
-    const getCameraPermission = async () =>{
+    const getCameraPermission = async () => {
         const { status } = await Camera.requestPermissionsAsync()
         if (status === 'granted') {
-            setCamera({hasCameraPermission:true,type:CameraType.back,ref:null})
+            setCamera({ hasCameraPermission: true, type: CameraType.back, ref: null })
         } else {
             return 'Access denied'
         }
     }
     const __startCamera = async () => {
-        
-        if (camera.hasCameraPermission === false || camera.hasCameraPermission === null) {
-            return 'Access denied'
-        } else {
-            // start the camera
-            setCameraStarted(true);
-            
+        if (!unmounted) {
+            if (camera.hasCameraPermission === false || camera.hasCameraPermission === null) {
+                return 'Access denied'
+            } else {
+                // start the camera
+                setCameraStarted(true);
+
+            }
         }
     }
 
-    useEffect(()=>{
-        getLocation();
-        getCameraPermission();
+    const getLocationFromMarker = async (coords: IRegion,isLocation:Boolean) => {
+        await Location.reverseGeocodeAsync({latitude:coords.latitude,longitude:coords.longitude}).then((adress) => {
+            console.log(isLocation)
+            if (isLocation) {
+                setcurrentLocation(adress[0].name + ' ' + adress[0].street + ' ' + adress[0].postalCode + ' ' + adress[0].city);
+            } else {
+                setAdress(adress[0].name + ' ' + adress[0].street);
+                setCity(adress[0].city);
+                setZipCode(adress[0].postalCode)
+            }
+        }) 
+    }
 
-    },[]);
+    let unmounted = false;
+    useEffect(() => {
+        if (!unmounted) {
+            getLocation();
+            getCameraPermission();
+        }
+        return () => {
+            unmounted = true;
+
+        }
+    }, [unmounted])
+
+
 
     return <Formik
         initialValues={{
@@ -150,9 +192,9 @@ export function AlertForm(props) {
         }}
         enableReinitialize={true}
         validationSchema={alertValidationSchema}
-        onSubmit={async(values)=> props.onEmailSend(await sendEmail(values))}
+        onSubmit={async (values) => { if (!unmounted) { props.onEmailSend(await sendEmail(values)) } }}
     >
-        {({ handleChange, handleBlur, handleSubmit, values, setFieldValue, errors, touched  }) => (
+        {({ handleChange, handleBlur, handleSubmit, values, setFieldValue, errors, touched }) => (
             <View style={styles.container}>
                 <View style={styles.inputBloc}>
                     <Text style={styles.text}>Choisissez le type d'alerte*</Text>
@@ -160,8 +202,10 @@ export function AlertForm(props) {
                         style={styles.input}
                         selectedValue={selectedAlertCause}
                         onValueChange={(itemValue: string, itemIndex) => {
-                            setFieldValue('alertType', itemValue)
-                            setSelectedAlertCause(itemValue)
+                            if (!unmounted) {
+                                setFieldValue('alertType', itemValue)
+                                setSelectedAlertCause(itemValue)
+                            }
                         }
                         }
                     >
@@ -190,7 +234,7 @@ export function AlertForm(props) {
                 </View>
                 <View style={styles.inputBloc}>
                     <Text style={styles.text}>Date de l'incident*</Text>
-                    <TextInput style={styles.input} value={date.toLocaleDateString()} onFocus={() => showDateTimePicker()} onChangeText={() => values.alertDate = date.toLocaleDateString()}></TextInput>
+                    <TextInput style={styles.input} value={date.toLocaleDateString()} onFocus={() => { if (!unmounted) { showDateTimePicker() } }} onChangeText={() => values.alertDate = date.toLocaleDateString()}></TextInput>
                     {isVisible && (
                         <DateTimePicker
                             mode='date'
@@ -204,7 +248,7 @@ export function AlertForm(props) {
                 </View>
                 <View style={styles.inputBloc}>
                     <Text style={styles.text}>Heure de l'incident*</Text>
-                    <TextInput style={styles.input} onFocus={() => showTimePicker()} value={`${(dateTime?.getHours() < 10 ? '0' : '') + dateTime.getHours().toString()} h ${(dateTime?.getMinutes() < 10 ? '0' : '') + dateTime?.getMinutes()}`} onChangeText={() => values.alertHour = `${(dateTime?.getHours() < 10 ? '0' : '') + dateTime.getHours().toString()} h ${(dateTime?.getMinutes() < 10 ? '0' : '') + dateTime?.getMinutes()}`}></TextInput>
+                    <TextInput style={styles.input} onFocus={() => { if (!unmounted) { showTimePicker() } }} value={`${(dateTime?.getHours() < 10 ? '0' : '') + dateTime.getHours().toString()} h ${(dateTime?.getMinutes() < 10 ? '0' : '') + dateTime?.getMinutes()}`} onChangeText={() => values.alertHour = `${(dateTime?.getHours() < 10 ? '0' : '') + dateTime.getHours().toString()} h ${(dateTime?.getMinutes() < 10 ? '0' : '') + dateTime?.getMinutes()}`}></TextInput>
                     {isTimeVisible && (
                         <DateTimePicker
                             mode='time'
@@ -219,7 +263,7 @@ export function AlertForm(props) {
                 <View style={styles.inputBloc}>
                     <View style={styles.multipleTextsOneline}>
                         <Text style={styles.text}>Où se trouve l'incident?*</Text>
-                        <Pressable onPress={() => { reverseGeoCode(true)}}>
+                        <Pressable onPress={() => { reverseGeoCode(true) }}>
                             <Text style={styles.text}>Sur ma position</Text>
                         </Pressable>
                     </View>
@@ -228,7 +272,7 @@ export function AlertForm(props) {
                         <Text style={styles.errorText}>{errors.alertLocation}</Text>
                     ) : null}
                     <View>
-                        <CustomMap ></CustomMap>
+                        <CustomMap latitude={coord != null ? coord.latitude : Variables.baseCoords.latitude} longitude={coord != null ? coord.longitude : Variables.baseCoords.longitude} latitudeDelta={0.4} longitudeDelta={0.4} onMarkerDrag={(coords: IRegion) => { getLocationFromMarker(coords,true) }} ></CustomMap>
                     </View>
 
                 </View>
@@ -236,53 +280,75 @@ export function AlertForm(props) {
                     <Text style={[styles.text, styles.pictureText]}>Ajouter une photo (optionnel)</Text>
                     {camera.hasCameraPermission == null || camera.hasCameraPermission == false ? (
                         <Text style={styles.errorText}>Vous devez autoriser l'accès à la caméra</Text>
-                    ) : ( <Pressable style={styles.pictureButton} onPress={async () =>{ if(!cameraStarted) {
-                        await __startCamera()
-                    }else if(camera.ref){
-                         camera.ref.takePictureAsync().then(async(photo)=>{
-                                
-                            // FileSystem.moveAsync({from:photo.uri,to:})
-                            // let cropData = {
-                            //     offset:{x:0,y:0},
-                            //     size:{width:75,height:100}
-                            //  }
-                            // await ImageEditor.cropImage(photo.uri,cropData).then(url=>{
-                            //     console.log("Cropped image uri", url)
-                            // })
-                            console.log(photo);
-                         });
-                        
-                    }}}>
+                    ) : (<Pressable style={styles.pictureButton} onPress={async () => {
+                        if (!unmounted) {
+                            getCameraPermission();
+                            if (!cameraStarted && !unmounted) {
+                                await __startCamera()
+                            } else if (camera.ref) {
+                                camera.ref.takePictureAsync({ base64: true }).then(async (photo: CameraCapturedPicture) => {
+                                    setCameraStarted(false);
+                                    
+
+                                    let base64Img = `data:image/jpg;base64,${photo.base64}`;
+                                    let data ={
+                                        "file":base64Img,
+                                        "upload_preset":"ml_default",
+                                        "cloud_name":process.env.CLOUD_NAME
+                                    }
+                                    fetch(`https://api.cloudinary.com/v1_1/devqqlz1p/image/upload`,{
+                                        body: JSON.stringify(data),
+                                        headers:{
+                                            'content-type': 'application/json'
+                                        },
+                                        method: 'POST'
+                                    }).then(async(response)=>{
+                                        const res = await response.json();
+                                        setPhoto({ base64: true, exif: photo.exif, height: 100, width: 100, uri: res.url });
+                                    })
+
+                                });
+
+                            }
+                        }
+
+                    }}>{photo.uri != null && photo.uri.length>0?(
+                        <Image source={{uri:photo.uri}} ></Image>
+                    ):(
                         <Image source={require('../../assets/Images/camera.png')} style={{ margin: "25%" }}></Image>
+                    )
+
+                    }
+                        
                     </Pressable>
                     )}
-                    {cameraStarted == true ?(
-                        <View style={styles.inputBloc}>
-                        <Camera style={styles.cameraContainer} type={camera.type} ref={ref=>camera.ref = ref}>
-                          <View
-                            style={{
-                              flex: 1,
-                              backgroundColor: 'transparent',
-                              flexDirection: 'row',
-                            }}>
-                            <TouchableOpacity
-                              style={{
-                                flex: 0.1,
-                                alignSelf: 'flex-end',
-                                alignItems: 'center',
-                              }}
-                              onPress={() => {
-                               setCamera({hasCameraPermission:camera.hasCameraPermission,type:camera.type === Camera.Constants.Type.back?Camera.Constants.Type.front:Camera.Constants.Type.back,ref:camera.ref});
-                              }}>
-                              <Text style={{ fontSize: 18, marginBottom: 10, color: 'white' }}>
-                                {' '}
-                                Flip{' '}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </Camera>
-                      </View>
-                    ):null}
+                    {cameraStarted == true ? (
+                        <View style={styles.cameraView}>
+                            <Camera style={styles.cameraContainer} type={camera.type} ref={ref => camera.ref = ref}>
+                                <View
+                                    style={{
+                                        flex: 1,
+                                        backgroundColor: 'transparent',
+                                        flexDirection: 'row',
+                                    }}>
+                                    <TouchableOpacity
+                                        style={{
+                                            flex: 0.1,
+                                            alignSelf: 'flex-end',
+                                            alignItems: 'center',
+                                        }}
+                                        onPress={() => {
+                                            if (!unmounted) {
+                                                setCamera({ hasCameraPermission: camera.hasCameraPermission, type: camera.type === Camera.Constants.Type.back ? Camera.Constants.Type.front : Camera.Constants.Type.back, ref: camera.ref });
+                                            }
+                                        }}>
+                                        <Image source={require('../../assets/Images/switch.png')} style={{ marginBottom: 10, marginLeft: 40 }}></Image>
+                                    </TouchableOpacity>
+                                </View>
+                            </Camera>
+                        </View>
+                    ) : null}
+                  
                 </View>
                 <View style={styles.inputBloc}>
                     <Text style={styles.text}>Votre nom*</Text>
@@ -301,13 +367,13 @@ export function AlertForm(props) {
                 <View style={styles.inputBloc}>
                     <View style={styles.multipleTextsOneline}>
                         <Text style={styles.text}>Votre adresse*</Text>
-                        <Pressable onPress={() => {reverseGeoCode(false)}}><Text style={styles.text}>Sur ma position</Text></Pressable>
+                        <Pressable onPress={() => { if (!unmounted) { reverseGeoCode(false) } }}><Text style={styles.text}>Sur ma position</Text></Pressable>
                     </View>
                     <TextInput style={styles.input} value={adress != '' ? adress : null} onTextInput={() => console.log("test")}></TextInput>
                     {errors.adress && touched.adress ? (
                         <Text style={styles.errorText}>{errors.adress}</Text>
                     ) : null}
-                    <CustomMap></CustomMap>
+                    <CustomMap latitude={location != null ? location.coords.latitude : Variables.baseCoords.latitude} longitude={location != null ? location.coords.longitude : Variables.baseCoords.longitude} latitudeDelta={0.4} longitudeDelta={0.4} onMarkerDrag={(coords: IRegion) => { getLocationFromMarker(coords,false) }}></CustomMap>
                 </View>
                 <View style={styles.inputBloc}>
                     <Text style={styles.text}>Code postal*</Text>
@@ -337,7 +403,7 @@ export function AlertForm(props) {
                         <Text style={styles.errorText}>{errors.phoneNumber}</Text>
                     ) : null}
                 </View>
-                <Pressable style={styles.validateButton} onPress={() =>{setFieldValue('adress',adress);setFieldValue('alertLocation',currentLocation);setFieldValue('town',city);setFieldValue('zipCode',zipCode);handleSubmit()} }>
+                <Pressable style={styles.validateButton} onPress={() => { if (!unmounted) { setFieldValue('adress', adress); setFieldValue('alertLocation', currentLocation); setFieldValue('town', city); setFieldValue('zipCode', zipCode);setFieldValue('alertPicture',photo.uri); setTimeout(() => { handleSubmit() }, 1000) } }}>
                     <Text style={styles.validateText}>Valider votre alerte</Text>
                 </Pressable>
             </View>

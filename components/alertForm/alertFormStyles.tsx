@@ -66,9 +66,17 @@ export default StyleSheet.create({
     errorText:{
         color:"red"
     },
+    cameraView:{
+        marginTop:10,
+        display:'flex',
+        justifyContent:"center",
+        alignItems:"center" 
+    },
     cameraContainer:{
-        width: "100%",
-        height: 300,
+        width: "80%",
+        height: 400,
         marginTop:15,
+      
+
     }
 })

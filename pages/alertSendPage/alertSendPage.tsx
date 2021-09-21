@@ -23,7 +23,7 @@ export function AlertSendPage({ navigation, route }: any) {
         </View>
         )}
         <RoutingButton iconUri={require('../../assets/Images/eye.png')} text={"Consulter les alertes"} onPress={() => navigation.navigate('consult')}></RoutingButton>
-        <RoutingButton iconUri={require('../../assets/Images/warning.png')} text={"Créer une alerte"} onPress={() => navigation.navigate('create')}></RoutingButton>
+        <RoutingButton iconUri={require('../../assets/Images/home.png')} text={"Revenir à l'accueil"} onPress={() => navigation.navigate('home')}></RoutingButton>
     </View>
 
 }
